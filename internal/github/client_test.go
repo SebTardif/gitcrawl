@@ -1105,6 +1105,37 @@ func TestRateLimitRetriesOn429WithRetryAfter(t *testing.T) {
 	}
 }
 
+func TestRateLimitWaitCapsHugeRetryAfter(t *testing.T) {
+	wait, ok := rateLimitWait(&RequestError{
+		Status: http.StatusTooManyRequests,
+		Headers: http.Header{
+			"Retry-After": []string{"999999999"},
+		},
+	})
+	if !ok {
+		t.Fatal("expected rate-limit wait")
+	}
+	if wait != maxRateLimitWait {
+		t.Fatalf("wait = %s, want %s cap", wait, maxRateLimitWait)
+	}
+}
+
+func TestRateLimitWaitCapsHugeRateLimitReset(t *testing.T) {
+	headers := make(http.Header)
+	headers.Set("X-RateLimit-Remaining", "0")
+	headers.Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(48*time.Hour).Unix(), 10))
+	wait, ok := rateLimitWait(&RequestError{
+		Status:  http.StatusForbidden,
+		Headers: headers,
+	})
+	if !ok {
+		t.Fatal("expected rate-limit wait")
+	}
+	if wait != maxRateLimitWait {
+		t.Fatalf("wait = %s, want %s cap", wait, maxRateLimitWait)
+	}
+}
+
 func TestRateLimitRespectsContextCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", "0")

@@ -650,6 +650,10 @@ func rateLimitHostForBaseURL(baseURL string) string {
 	return parsed.Host
 }
 
+// maxRateLimitWait bounds GitHub Retry-After and X-RateLimit-Reset sleeps so a
+// huge or malicious header cannot hang sync indefinitely.
+const maxRateLimitWait = 5 * time.Minute
+
 func rateLimitWait(err error) (time.Duration, bool) {
 	reqErr, ok := err.(*RequestError)
 	if !ok {
@@ -660,7 +664,7 @@ func rateLimitWait(err error) (time.Duration, bool) {
 	}
 	if v := strings.TrimSpace(reqErr.Headers.Get("Retry-After")); v != "" {
 		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
-			return time.Duration(secs) * time.Second, true
+			return capRateLimitWait(time.Duration(secs) * time.Second), true
 		}
 	}
 	if reqErr.Headers.Get("X-RateLimit-Remaining") != "0" {
@@ -671,9 +675,16 @@ func rateLimitWait(err error) (time.Duration, bool) {
 		return 0, false
 	}
 	if wait := time.Until(time.Unix(secs, 0)); wait > 0 {
-		return wait, true
+		return capRateLimitWait(wait), true
 	}
 	return time.Second, true
+}
+
+func capRateLimitWait(wait time.Duration) time.Duration {
+	if wait > maxRateLimitWait || wait < 0 {
+		return maxRateLimitWait
+	}
+	return wait
 }
 
 func nextPage(linkHeader, baseURL string) string {
