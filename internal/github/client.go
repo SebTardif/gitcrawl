@@ -663,8 +663,8 @@ func rateLimitWait(err error) (time.Duration, bool) {
 		return 0, false
 	}
 	if v := strings.TrimSpace(reqErr.Headers.Get("Retry-After")); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
-			return capRateLimitWait(time.Duration(secs) * time.Second), true
+		if wait, ok := retryAfterWait(v); ok {
+			return wait, true
 		}
 	}
 	if reqErr.Headers.Get("X-RateLimit-Remaining") != "0" {
@@ -678,6 +678,23 @@ func rateLimitWait(err error) (time.Duration, bool) {
 		return capRateLimitWait(wait), true
 	}
 	return time.Second, true
+}
+
+func retryAfterWait(value string) (time.Duration, bool) {
+	seconds, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			return maxRateLimitWait, true
+		}
+		return 0, false
+	}
+	if seconds == 0 {
+		return 0, false
+	}
+	if seconds >= uint64(maxRateLimitWait/time.Second) {
+		return maxRateLimitWait, true
+	}
+	return time.Duration(seconds) * time.Second, true
 }
 
 func capRateLimitWait(wait time.Duration) time.Duration {

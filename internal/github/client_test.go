@@ -1109,7 +1109,7 @@ func TestRateLimitWaitCapsHugeRetryAfter(t *testing.T) {
 	wait, ok := rateLimitWait(&RequestError{
 		Status: http.StatusTooManyRequests,
 		Headers: http.Header{
-			"Retry-After": []string{"999999999"},
+			"Retry-After": []string{"18446744074"},
 		},
 	})
 	if !ok {
@@ -1118,6 +1118,33 @@ func TestRateLimitWaitCapsHugeRetryAfter(t *testing.T) {
 	if wait != maxRateLimitWait {
 		t.Fatalf("wait = %s, want %s cap", wait, maxRateLimitWait)
 	}
+}
+
+func TestRateLimitClientCapsOverflowingRetryAfter(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "18446744074")
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	var messages []string
+	reporter := Reporter(func(message string) { messages = append(messages, message) })
+	client := New(Options{BaseURL: server.URL, PageDelay: -1})
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err := client.GetRepo(ctx, "openclaw", "gitcrawl", reporter)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want context deadline", err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1 before capped wait", got)
+	}
+	if got := strings.Join(messages, "\n"); !strings.Contains(got, "rate-limit retry wait=5m0s") {
+		t.Fatalf("reporter output = %q, want capped wait", got)
+	}
+	t.Logf("client trace: requests=%d reporter=%q result=%v", calls.Load(), messages, err)
 }
 
 func TestRateLimitWaitCapsHugeRateLimitReset(t *testing.T) {
