@@ -3724,7 +3724,7 @@ func syncPortableStore(ctx context.Context, remoteURL, dir string) (string, erro
 				return "", err
 			}
 			if resetErr := runGit(ctx, "", "-C", dir, "reset", "--hard", "HEAD"); resetErr != nil {
-				return "", err
+				return "", resetErr
 			}
 			if retryErr := fastForwardGitCheckout(ctx, dir, false); retryErr != nil {
 				return "", retryErr
@@ -3747,7 +3747,9 @@ func syncPortableStore(ctx context.Context, remoteURL, dir string) (string, erro
 	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 		return "", fmt.Errorf("create portable store parent: %w", err)
 	}
-	if err := runGit(ctx, "", "clone", "--depth", "1", remoteURL, dir); err != nil {
+	cloneCtx, cancel := context.WithTimeout(ctx, portableStoreRepairTimeout)
+	defer cancel()
+	if err := runGit(cloneCtx, "", "clone", "--depth", "1", remoteURL, dir); err != nil {
 		return "", err
 	}
 	if err := markPortableStoreCheckout(dir); err != nil {
