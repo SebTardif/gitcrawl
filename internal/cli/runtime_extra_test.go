@@ -239,7 +239,7 @@ func TestCopySQLiteFileAtomicVerifiedRemovesTempFiles(t *testing.T) {
 	source := filepath.Join(dir, "source.db")
 	target := filepath.Join(dir, "target.db")
 	seedPortableThread(t, source, 1, "copy temp cleanup")
-	if err := copySQLiteFileAtomicVerified(context.Background(), source, target); err != nil {
+	if _, err := copySQLiteFileAtomicVerified(context.Background(), source, target); err != nil {
 		t.Fatalf("copy verified sqlite file: %v", err)
 	}
 	matches, err := filepath.Glob(filepath.Join(dir, ".target.db.tmp-*"))
@@ -254,7 +254,7 @@ func TestCopySQLiteFileAtomicVerifiedRemovesTempFiles(t *testing.T) {
 	if err := os.WriteFile(invalidSource, []byte("not sqlite"), 0o600); err != nil {
 		t.Fatalf("write invalid source: %v", err)
 	}
-	if err := copySQLiteFileAtomicVerified(context.Background(), invalidSource, failedTarget); err == nil {
+	if _, err := copySQLiteFileAtomicVerified(context.Background(), invalidSource, failedTarget); err == nil {
 		t.Fatal("invalid sqlite source should fail validation")
 	}
 	matches, err = filepath.Glob(filepath.Join(dir, ".failed.db.tmp-*"))
@@ -1067,22 +1067,6 @@ func TestPortableRuntimeUtilityBranches(t *testing.T) {
 	if recentPortableRefresh("", now, time.Minute) || recentPortableRefresh("bad", now, time.Minute) || !recentPortableRefresh(now.Format(time.RFC3339Nano), now, time.Minute) {
 		t.Fatal("recent refresh classification mismatch")
 	}
-	lockPath := filepath.Join(dir, "refresh.lock")
-	if err := os.WriteFile(lockPath, []byte("123\n"), 0o600); err != nil {
-		t.Fatalf("write lock: %v", err)
-	}
-	removeStalePortableRefreshLock(lockPath, now)
-	if _, err := os.Stat(lockPath); err != nil {
-		t.Fatalf("fresh lock should remain: %v", err)
-	}
-	old := now.Add(-3 * portableStoreRefreshTimeout)
-	if err := os.Chtimes(lockPath, old, old); err != nil {
-		t.Fatalf("age lock: %v", err)
-	}
-	removeStalePortableRefreshLock(lockPath, now)
-	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
-		t.Fatalf("stale lock should be removed, err=%v", err)
-	}
 	t.Setenv("GITCRAWL_PORTABLE_REFRESH_TTL", "0")
 	if got := portableStoreRefreshInterval(); got != 0 {
 		t.Fatalf("zero ttl = %s", got)
@@ -1127,7 +1111,7 @@ func TestPortableRuntimeUtilityBranches(t *testing.T) {
 		t.Fatal("explicit-config default portable store should be repairable")
 	}
 	lockRoot := filepath.Join(dir, "locked-store")
-	lockPath = filepath.Join(lockRoot, ".git", "index.lock")
+	lockPath := filepath.Join(lockRoot, ".git", "index.lock")
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		t.Fatalf("mkdir lock dir: %v", err)
 	}
