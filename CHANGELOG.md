@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.9.4 - Unreleased
+## 0.9.4 - 2026-08-30
 
 - Report the actual reset failure when portable-store initialization cannot recover from a dirty merge. Thanks @SebTardif.
+- Replace retired `gitcrawl gh` examples with the local archive and Octopool-backed `gh` workflow.
 
 ## 0.9.3 - 2026-08-29
 
