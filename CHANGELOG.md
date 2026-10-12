@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Create a missing local database during `init` when the path is inside a Git worktree, and leave an existing database in that worktree unchanged. Thanks @SebTardif.
+
 ## 0.15.1 - 2026-10-11
 
 **Highlights:** Faster embedding on large archives, reliable local database setup, and Go security fixes.

@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -124,16 +126,8 @@ func (a *App) runInit(ctx context.Context, args []string) error {
 		}
 	}
 	if remoteEndpointValue == "" && portableStoreURL == "" {
-		if _, portable, err := portableStoreRoot(ctx, cfg.DBPath); err != nil {
+		if err := initializeMissingLocalDatabase(ctx, cfg.DBPath); err != nil {
 			return err
-		} else if !portable {
-			st, err := store.Open(ctx, cfg.DBPath)
-			if err != nil {
-				return fmt.Errorf("initialize local database: %w", err)
-			}
-			if err := st.Close(); err != nil {
-				return fmt.Errorf("close initialized local database: %w", err)
-			}
 		}
 	}
 	result := initResult{
@@ -153,6 +147,34 @@ func (a *App) runInit(ctx context.Context, args []string) error {
 		result.RemoteArchive = cfg.Remote.Archive
 	}
 	return a.writeInitOutput(result)
+}
+
+// initializeMissingLocalDatabase creates the local SQLite file when it is
+// absent. An existing file inside a Git worktree is left untouched: that
+// checkout can be an unmarked portable source, and opening it would migrate
+// the source in place.
+func initializeMissingLocalDatabase(ctx context.Context, dbPath string) error {
+	_, portable, err := portableStoreRoot(ctx, dbPath)
+	if err != nil {
+		return err
+	}
+	if portable {
+		_, err = os.Stat(dbPath)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("inspect local database: %w", err)
+		}
+	}
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		return fmt.Errorf("initialize local database: %w", err)
+	}
+	if err := st.Close(); err != nil {
+		return fmt.Errorf("close initialized local database: %w", err)
+	}
+	return nil
 }
 
 func (a *App) absoluteInitPath(path string) (string, error) {
