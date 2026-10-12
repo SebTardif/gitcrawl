@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Create a missing local database during `init` when the path is inside a Git worktree, and leave an existing database in that worktree unchanged. Thanks @SebTardif.
+- Create a missing local database during `init` when the path is inside a Git worktree. Leave an existing database unchanged, and leave a gzip portable source without a raw database file unchanged. Thanks @SebTardif.
 
 ## 0.15.1 - 2026-10-11
 

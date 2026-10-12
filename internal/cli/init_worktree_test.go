@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,6 +63,36 @@ func TestInitLeavesExistingWorktreeDatabaseUntouched(t *testing.T) {
 	}
 	if string(got) != sentinel {
 		t.Fatalf("existing worktree database changed to %q", got)
+	}
+}
+
+func TestInitDBPreservesCompressedPortableCheckout(t *testing.T) {
+	fixture := newPortableRefreshFixture(t, true)
+	logical := filepath.Join(fixture.checkout, fixture.relative)
+	if _, err := os.Stat(logical); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("fixture raw database: %v", err)
+	}
+	before := portableTestGit(t, fixture.checkout, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching")
+	if before != "" {
+		t.Fatalf("fixture not clean: %q", before)
+	}
+	configPath := filepath.Join(filepath.Dir(fixture.checkout), "local.toml")
+	app := New()
+	var stdout, stderr bytes.Buffer
+	app.Stdout, app.Stderr = &stdout, &stderr
+	if err := app.Run(context.Background(), []string{"--config", configPath, "init", "--db", logical}); err != nil {
+		t.Fatalf("init: %v\n%s", err, stderr.String())
+	}
+	if _, err := os.Stat(logical); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("init created raw database: %v", err)
+	}
+	after := portableTestGit(t, fixture.checkout, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching")
+	if after != "" {
+		t.Fatalf("init dirtied compressed checkout: %q", after)
+	}
+	result, err := fixture.refresh(t)
+	if err != nil {
+		t.Fatalf("refresh: %+v %v", result, err)
 	}
 }
 
